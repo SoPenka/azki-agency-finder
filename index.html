@@ -172,7 +172,7 @@ const sourceRows = [
  ['پارسیان','505076','حمید قنبری','1110/505076/403/002371'],
  ['کوثر','1010','تجارت الکترونیک نوین نار پیمان رئوفی','1404/1010/487278'],
  ['تعاون','1031','بیمه تعاون','02/1031/2835/1001/17595'],
- ['تجارت نو','91804','شعبه بیمه تجارت نو کارگزاری',null],
+ ['تجارت نو','91804','شعبه بیمه تجارت نو کارگزاری','1405/201/2283/91804/2689991'],
  ['ایران','9970','آرامش آتیه بهبود','1404/5/1/400/9970/7085'],
  ['دی','8012','پرتو امید دی بیمه دی','1404/31/8012/4982732'],
  ['حافظ','3065','بیمه حافظ','1401/1101/3065/36'],
@@ -189,8 +189,8 @@ const sourceRows = [
  ['ملت','3021','اعتماد اندیشان راستین ملت','1403/1/1/1/3021/0268641'],
  ['معلم','10016','شرکت امید مشاور والا بیمه معلم','04/600/10016/005567'],
  ['هوشمند فردا','1804','هوشمند فردا','1405/420101/1010/1804/176178'],
- ['آسیا','3128163','مجید مهدادمنش',null],
- ['حکمت صبا','1249','حسین مهریاری',null]
+ ['آسیا','3128163','مجید مهدادمنش','3128163/05/011287'],
+ ['حکمت صبا','1249','حسین مهریاری','1405/11101/350/1249/796']
 ];
 
 const agencies = [...new Map(sourceRows.map(([insurer,code,name]) =>
@@ -228,11 +228,14 @@ const rules = [
  {insurer:'پاسارگاد',re:new RegExp(`^1/(\\d+)/0-0/${YEAR}/\\d+$`),pos:1},
  {insurer:'کارآفرین',re:/^211\/(\d+)\/\1\/\d{2}\/\d+$/,pos:1},
  {insurer:'سامان',re:new RegExp(`^${YEAR}/(\\d+-\\d+)/\\d+/\\d+$`),extract:m=>[m[1],m[1].split('-')[0]],candidates:true},
- {insurer:'تجارت نو',re:new RegExp(`^${YEAR}/201/(\\d+)/\\d+/\\d+$`),pos:1},
+ // Both codes in this pair have supplied samples. An unlisted policy can match both.
+ {insurer:'تجارت نو',re:new RegExp(`^${YEAR}/201/(\\d+)/(\\d+)/\\d+$`),
+  extract:m=>canonicalCode(m[1])==='2283' && canonicalCode(m[2])==='91804' ? [m[1],m[2]] : [m[1]]},
  {insurer:'پارسیان',re:/^1110\/(\d+)\/\d{3}\/\d+$/,pos:1},
  {insurer:'تعاون',re:/^\d{2}\/(\d+)\/2835\/\d+\/\d+$/,pos:1},
  {insurer:'حافظ',re:new RegExp(`^${YEAR}/1101/(\\d+)/\\d+$`),pos:1},
  {insurer:'سرمد',re:/^\d{2}\/(\d+)\/953\/10\/\d+$/,pos:1},
+ {insurer:'حکمت صبا',re:new RegExp(`^${YEAR}/11101/350/(\\d+)/\\d+$`),pos:1},
  {insurer:'هوشمند فردا',re:new RegExp(`^${YEAR}/420101/1010/(\\d+)/\\d+$`),pos:1}
 ];
 
@@ -257,6 +260,12 @@ function matchPolicy(value,selectedInsurer='') {
   return {...base,status:'company_mismatch',detectedInsurers:[...new Set(formats.map(f=>f.insurer))]};
  const relevant=formats.filter(f=>!selectedInsurer||f.insurer===selectedInsurer);
  if(!relevant.length) return {...base,status:'unknown_format'};
+ const sample=examples.find(e=>e.policy===policy && relevant.some(f=>f.insurer===e.insurer));
+ if(sample){
+  const {insurer,code}=sample;
+  const agency=index.get(insurer+'|'+canonicalCode(code));
+  return {...base,status:'matched',agency,insurer,code,sample:true};
+ }
  const matches=[...new Map(relevant.flatMap(f=>f.matches).map(a=>[a.insurer+'|'+a.code,a])).values()];
  if(matches.length>1 || new Set(relevant.map(f=>f.insurer)).size>1)
   return {...base,status:'ambiguous',matches};
@@ -264,7 +273,7 @@ function matchPolicy(value,selectedInsurer='') {
  if(matches.length===1){
   const agency=matches[0];
   return {...base,status:'matched',agency,insurer:agency.insurer,code:agency.code,
-   sample:examples.some(e=>e.policy===policy&&e.insurer===agency.insurer&&e.code===agency.code)};
+   sample:false};
  }
  // A compound encoding without a known match does not prove which code variant
  // is the agency code: keep it indeterminate instead of making a false denial.

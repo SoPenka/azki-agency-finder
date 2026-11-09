@@ -162,7 +162,7 @@ const sourceRows = [
  ['معلم','4763','آناهیتا سرکانی','05/600/4763/001250'],
  ['پاسارگاد','43018','مژگان پنادگو','1/43018/0-0/1401/767'],
  ['کارآفرین','4709','پریسا تارم','211/4709/4709/01/27607'],
- ['پردیس','4042','پردیس',null],
+ ['پردیس','4042','پردیس','40528/4052825798'],
  ['البرز','6050','معدنی پور','31/6050/2165'],
  ['سامان','2373','مریم رضوانی','1403/2373-70413/220/2980'],
  ['تجارت نو','2283','حسن درخشان','1403/201/2283/91804/1333325'],
@@ -171,6 +171,7 @@ const sourceRows = [
  ['تجارت نو','112','شرکت نمایندگی بیمه سهند ویسمن تجارت نو','1402/201/112/91889/153733'],
  ['پارسیان','505076','حمید قنبری','1110/505076/403/002371'],
  ['کوثر','1010','تجارت الکترونیک نوین نار پیمان رئوفی','1404/1010/487278'],
+ ['کوثر','1010','تجارت الکترونیک نوین نار پیمان رئوفی','1405/1010/268430'],
  ['تعاون','1031','بیمه تعاون','02/1031/2835/1001/17595'],
  ['تجارت نو','91804','شعبه بیمه تجارت نو کارگزاری','1405/201/2283/91804/2689991'],
  ['ایران','9970','آرامش آتیه بهبود','1404/5/1/400/9970/7085'],
@@ -248,6 +249,17 @@ function matchPolicy(value,selectedInsurer='') {
  if(policy.length>160 || !/^\d+(?:-\d+)*(?:\/\d+(?:-\d+)*)+$/.test(policy))
   return {...base,status:'invalid'};
  if(policy.split('/').some(p=>p.length>30)) return {...base,status:'invalid'};
+ // A supplied sample can identify an agency even without a reusable number format.
+ const samples=examples.filter(e=>e.policy===policy);
+ if(samples.length){
+  const matches=samples.filter(e=>!selectedInsurer||e.insurer===selectedInsurer)
+   .map(e=>index.get(e.insurer+'|'+canonicalCode(e.code)));
+  if(!matches.length)
+   return {...base,status:'company_mismatch',detectedInsurers:[...new Set(samples.map(e=>e.insurer))]};
+  if(matches.length>1) return {...base,status:'ambiguous',matches};
+  const [agency]=matches;
+  return {...base,status:'matched',agency,insurer:agency.insurer,code:agency.code,sample:true};
+ }
  const formats=[];
  for(const rule of rules){
   const m=policy.match(rule.re);
@@ -260,12 +272,6 @@ function matchPolicy(value,selectedInsurer='') {
   return {...base,status:'company_mismatch',detectedInsurers:[...new Set(formats.map(f=>f.insurer))]};
  const relevant=formats.filter(f=>!selectedInsurer||f.insurer===selectedInsurer);
  if(!relevant.length) return {...base,status:'unknown_format'};
- const sample=examples.find(e=>e.policy===policy && relevant.some(f=>f.insurer===e.insurer));
- if(sample){
-  const {insurer,code}=sample;
-  const agency=index.get(insurer+'|'+canonicalCode(code));
-  return {...base,status:'matched',agency,insurer,code,sample:true};
- }
  const matches=[...new Map(relevant.flatMap(f=>f.matches).map(a=>[a.insurer+'|'+a.code,a])).values()];
  if(matches.length>1 || new Set(relevant.map(f=>f.insurer)).size>1)
   return {...base,status:'ambiguous',matches};
